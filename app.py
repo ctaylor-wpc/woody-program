@@ -26,7 +26,7 @@ def get_service_account_info():
     return sa
 
 # Your Google Drive folder ID
-GOOGLE_DRIVE_FOLDER_ID = '1D6tvx4ApYZeNuLnGre7uTe12qZjEIsjM'
+GOOGLE_DRIVE_FOLDER_ID = '0AKxpZ1x5DgVhUk9PVA'
 
 # ============================================================================
 
@@ -106,16 +106,19 @@ def upload_photo_to_drive(file_bytes, filename, mime_type='image/jpeg'):
             resumable=True
         )
         
+        # Add supportsAllDrives=True for Shared Drives
         file = service.files().create(
             body=file_metadata,
             media_body=media,
-            fields='id'
+            fields='id',
+            supportsAllDrives=True
         ).execute()
         
         # Make file publicly readable (optional - remove if you want private files)
         service.permissions().create(
             fileId=file.get('id'),
-            body={'type': 'anyone', 'role': 'reader'}
+            body={'type': 'anyone', 'role': 'reader'},
+            supportsAllDrives=True
         ).execute()
         
         return file.get('id')
@@ -134,7 +137,8 @@ def download_photo_from_drive(file_id):
         if not service:
             return None
         
-        request = service.files().get_media(fileId=file_id)
+        # Add supportsAllDrives=True for Shared Drives
+        request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
         file_bytes = io.BytesIO()
         downloader = MediaIoBaseDownload(file_bytes, request)
         
