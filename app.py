@@ -114,6 +114,13 @@ def upload_photo_to_drive(file_bytes, filename, mime_type='image/jpeg'):
             supportsAllDrives=True
         ).execute()
         
+        # Make file publicly readable (optional - remove if you want private files)
+        service.permissions().create(
+            fileId=file.get('id'),
+            body={'type': 'anyone', 'role': 'reader'},
+            supportsAllDrives=True
+        ).execute()
+        
         return file.get('id')
     except Exception as e:
         st.error(f"Error uploading to Google Drive: {str(e)}")
@@ -121,7 +128,8 @@ def upload_photo_to_drive(file_bytes, filename, mime_type='image/jpeg'):
 
 def get_photo_url_from_drive(file_id):
     """Generate viewable URL for photo from Google Drive file ID"""
-    return f"https://drive.google.com/uc?export=view&id={file_id}"
+    # For Shared Drives, we need to use a different URL format
+    return f"https://drive.google.com/thumbnail?id={file_id}&sz=w1000"
 
 def download_photo_from_drive(file_id):
     """Download photo from Google Drive"""
@@ -419,12 +427,26 @@ def main():
             photo_id, project_id, google_drive_id, caption, user, date = photo
             with cols[idx % 3]:
                 try:
+                    # Try multiple URL formats for better compatibility
                     photo_url = get_photo_url_from_drive(google_drive_id)
+                    
+                    # Debug info - remove after testing
+                    with st.expander("🔍 Debug Info"):
+                        st.write(f"File ID: {google_drive_id}")
+                        st.write(f"URL: {photo_url}")
+                        direct_link = f"https://drive.google.com/file/d/{google_drive_id}/view"
+                        st.markdown(f"[Open in Drive]({direct_link})")
+                    
                     st.image(photo_url, use_container_width=True)
                     st.caption(f"**{caption}**")
                     st.caption(f"*{user} • {date}*")
                 except Exception as e:
                     st.error(f"Error loading photo: {str(e)}")
+                    # Provide fallback link
+                    direct_link = f"https://drive.google.com/file/d/{google_drive_id}/view"
+                    st.markdown(f"[View Photo in Google Drive]({direct_link})")
+                    st.caption(f"**{caption}**")
+                    st.caption(f"*{user} • {date}*")
     else:
         st.info("No photos yet. Add the first one!")
     
