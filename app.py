@@ -310,6 +310,47 @@ def main():
     if st.sidebar.button("➕ Create New Project"):
         st.session_state.show_new_project_form = True
     
+    # Show new project form if flag is set
+    if st.session_state.get('show_new_project_form', False):
+        with st.sidebar.expander("📝 New Project Form", expanded=True):
+            new_project_name = st.text_input("Project Name", key="new_proj_name")
+            new_project_id = st.text_input("Project ID (lowercase, no spaces)", key="new_proj_id", 
+                                          help="Example: roses-2025 or hydrangea-batch-3")
+            
+            if st.button("Create Project"):
+                if new_project_name and new_project_id:
+                    # Check if project ID already exists
+                    existing = get_project_by_id(new_project_id)
+                    if existing:
+                        st.error("Project ID already exists! Choose a different ID.")
+                    else:
+                        # Create new project with default values
+                        new_project_data = (
+                            new_project_id,
+                            new_project_name,
+                            'Healthy',  # default status
+                            100,  # default health
+                            'Not yet assessed',
+                            'None detected',
+                            'None detected',
+                            'Adequate',
+                            'Good',
+                            'TBD',  # greenhouse location
+                            'Initial planting and monitoring',
+                            'Not yet available',
+                            datetime.now().strftime('%Y-%m-%d')
+                        )
+                        add_project(new_project_data)
+                        st.success(f"Project '{new_project_name}' created!")
+                        st.session_state.show_new_project_form = False
+                        st.rerun()
+                else:
+                    st.warning("Please fill in both Project Name and Project ID")
+            
+            if st.button("Cancel"):
+                st.session_state.show_new_project_form = False
+                st.rerun()
+    
     # Main content area
     col1, col2 = st.columns([3, 1])
     
