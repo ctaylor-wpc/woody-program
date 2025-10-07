@@ -114,13 +114,6 @@ def upload_photo_to_drive(file_bytes, filename, mime_type='image/jpeg'):
             supportsAllDrives=True
         ).execute()
         
-        # Make file publicly readable (optional - remove if you want private files)
-        service.permissions().create(
-            fileId=file.get('id'),
-            body={'type': 'anyone', 'role': 'reader'},
-            supportsAllDrives=True
-        ).execute()
-        
         return file.get('id')
     except Exception as e:
         st.error(f"Error uploading to Google Drive: {str(e)}")
