@@ -10,43 +10,22 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
 
-# Allow access to Google Sheet Dashboard
-def _get_service_account_info_from_secrets():
+# ============================================================================
+# GOOGLE DRIVE CONFIGURATION
+# ============================================================================
+
+def get_service_account_info():
     """
-    Reads service account JSON stored in st.secrets["gcp"]["service_account_json"].
-    Handles either a dict or a JSON string (escaped newlines etc).
+    Reads service account JSON from st.secrets
     """
     sa = st.secrets.get("gcp", {}).get("service_account_json")
     if not sa:
-        raise KeyError("Service account JSON not found: check st.secrets['gcp']['service_account_json']")
+        raise KeyError("Service account JSON not found in secrets")
     if isinstance(sa, str):
         return json.loads(sa)
     return sa
 
-SCOPES = [
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive"
-]
-
-def get_gspread_client():
-    sa_info = _get_service_account_info_from_secrets()
-    creds = Credentials.from_service_account_info(sa_info, scopes=SCOPES)
-    return gspread.authorize(creds)
-
-SHEET_ID = "1kEOIdxYqPKx6R47sNdaY8lWR8PmLc6bz_PyHtYH1M7Q"
-
-
-
-# Allow Access to Google Drive for PDF Upload
-def get_drive_service():
-    """
-    Returns a Google Drive service using the same service account as Sheets.
-    """
-    sa_info = _get_service_account_info_from_secrets()
-    creds = Credentials.from_service_account_info(sa_info, scopes=["https://www.googleapis.com/auth/drive"])
-    service = build("drive", "v3", credentials=creds)
-    return service
-
+# Your Google Drive folder ID
 GOOGLE_DRIVE_FOLDER_ID = '0AKxpZ1x5DgVhUk9PVA'
 
 # ============================================================================
@@ -96,23 +75,13 @@ def init_database():
     conn.close()
 
 def get_google_drive_service():
-    """
-    Initialize and return Google Drive service
-    TODO: Uncomment and configure based on your chosen authentication method
-    """
+    """Initialize and return Google Drive service"""
     try:
-        # Option 1: Using Streamlit secrets (recommended for deployment)
+        sa_info = get_service_account_info()
         credentials = service_account.Credentials.from_service_account_info(
-            st.secrets["gcp_service_account"],
+            sa_info,
             scopes=['https://www.googleapis.com/auth/drive']
         )
-        
-        # Option 2: Using local service account file (for local development)
-        # credentials = service_account.Credentials.from_service_account_file(
-        #     SERVICE_ACCOUNT_FILE,
-        #     scopes=['https://www.googleapis.com/auth/drive']
-        # )
-        
         service = build('drive', 'v3', credentials=credentials)
         return service
     except Exception as e:
