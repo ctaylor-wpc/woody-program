@@ -36,20 +36,25 @@ def init_database():
     conn = sqlite3.connect('nursery.db')
     c = conn.cursor()
     
-    # Projects table
+    # Projects table - updated with new fields
     c.execute('''CREATE TABLE IF NOT EXISTS projects
                  (id TEXT PRIMARY KEY,
                   name TEXT NOT NULL,
                   overall_status TEXT,
-                  overall_health INTEGER,
-                  root_growth TEXT,
+                  house TEXT,
+                  plant_shape TEXT,
+                  water_status TEXT,
                   pest_presence TEXT,
                   disease_presence TEXT,
-                  water_level TEXT,
-                  soil_quality TEXT,
-                  greenhouse_location TEXT,
-                  next_steps TEXT,
-                  retail_availability TEXT,
+                  quantity TEXT,
+                  root_structure TEXT,
+                  nutrient_status TEXT,
+                  pest_type TEXT,
+                  disease_type TEXT,
+                  action_required TEXT,
+                  priority TEXT,
+                  retail_ready TEXT,
+                  header_image_id TEXT,
                   last_updated TEXT)''')
     
     # Photos table
@@ -106,7 +111,6 @@ def upload_photo_to_drive(file_bytes, filename, mime_type='image/jpeg'):
             resumable=True
         )
         
-        # Add supportsAllDrives=True for Shared Drives
         file = service.files().create(
             body=file_metadata,
             media_body=media,
@@ -119,32 +123,22 @@ def upload_photo_to_drive(file_bytes, filename, mime_type='image/jpeg'):
         st.error(f"Error uploading to Google Drive: {str(e)}")
         return None
 
-def get_photo_url_from_drive(file_id):
-    """Generate viewable URL for photo from Google Drive file ID"""
-    # For Shared Drives, we need to use a different URL format
-    return f"https://drive.google.com/thumbnail?id={file_id}&sz=w1000"
-
-def download_photo_from_drive(file_id):
-    """Download photo from Google Drive"""
+def delete_photo_from_drive(file_id):
+    """Delete photo from Google Drive"""
     try:
         service = get_google_drive_service()
         if not service:
-            return None
+            return False
         
-        # Add supportsAllDrives=True for Shared Drives
-        request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
-        file_bytes = io.BytesIO()
-        downloader = MediaIoBaseDownload(file_bytes, request)
-        
-        done = False
-        while done is False:
-            status, done = downloader.next_chunk()
-        
-        file_bytes.seek(0)
-        return file_bytes
+        service.files().delete(fileId=file_id, supportsAllDrives=True).execute()
+        return True
     except Exception as e:
-        st.error(f"Error downloading from Google Drive: {str(e)}")
-        return None
+        st.error(f"Error deleting from Google Drive: {str(e)}")
+        return False
+
+def get_photo_url_from_drive(file_id):
+    """Generate viewable URL for photo from Google Drive file ID"""
+    return f"https://drive.google.com/thumbnail?id={file_id}&sz=w1000"
 
 # Database query functions
 def get_all_projects():
@@ -169,7 +163,7 @@ def add_project(project_data):
     """Add new project to database"""
     conn = sqlite3.connect('nursery.db')
     c = conn.cursor()
-    c.execute('''INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+    c.execute('''INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
               project_data)
     conn.commit()
     conn.close()
@@ -180,18 +174,30 @@ def update_project_status(project_id, status_data):
     c = conn.cursor()
     c.execute('''UPDATE projects SET 
                  overall_status = ?,
-                 overall_health = ?,
-                 root_growth = ?,
+                 house = ?,
+                 plant_shape = ?,
+                 water_status = ?,
                  pest_presence = ?,
                  disease_presence = ?,
-                 water_level = ?,
-                 soil_quality = ?,
-                 greenhouse_location = ?,
-                 next_steps = ?,
-                 retail_availability = ?,
+                 quantity = ?,
+                 root_structure = ?,
+                 nutrient_status = ?,
+                 pest_type = ?,
+                 disease_type = ?,
+                 action_required = ?,
+                 priority = ?,
+                 retail_ready = ?,
                  last_updated = ?
                  WHERE id = ?''',
               (*status_data, project_id))
+    conn.commit()
+    conn.close()
+
+def update_project_header_image(project_id, image_id):
+    """Update project header image"""
+    conn = sqlite3.connect('nursery.db')
+    c = conn.cursor()
+    c.execute('UPDATE projects SET header_image_id = ? WHERE id = ?', (image_id, project_id))
     conn.commit()
     conn.close()
 
@@ -211,6 +217,14 @@ def add_photo(project_id, google_drive_id, caption, user_name):
     date_added = datetime.now().strftime('%Y-%m-%d')
     c.execute('INSERT INTO photos (project_id, google_drive_id, caption, user_name, date_added) VALUES (?, ?, ?, ?, ?)',
               (project_id, google_drive_id, caption, user_name, date_added))
+    conn.commit()
+    conn.close()
+
+def delete_photo(photo_id):
+    """Delete photo record from database"""
+    conn = sqlite3.connect('nursery.db')
+    c = conn.cursor()
+    c.execute('DELETE FROM photos WHERE id = ?', (photo_id,))
     conn.commit()
     conn.close()
 
@@ -238,113 +252,161 @@ def seed_sample_data():
     projects = get_all_projects()
     if len(projects) == 0:
         sample_projects = [
-            ('hydrangea-little-lime-2025', 'Hydrangea Little Lime 2025', 'Healthy', 85,
-             'Good', 'None', 'None', 'Adequate', 'Excellent', 'GH-3, Row 5',
-             'Monitor for aphids, fertilize in 2 weeks', 'Available - 45 units',
-             '2025-10-05'),
-            ('knockout-roses-spring-2025', 'Knockout Roses Spring 2025', 'Needs Attention', 65,
-             'Moderate', 'Minor aphids detected', 'None', 'Slightly dry', 'Good', 'GH-1, Row 2-3',
-             'Apply aphid treatment, increase watering', 'Not yet available',
-             '2025-10-06')
+            ('hydrangea-little-lime-2025', 'Hydrangea Little Lime 2025', 'Healthy',
+             'House 3', 'Rounded', 'Adequate', 'None', 'None',
+             '45 units', 'Excellent', 'Good', '', '',
+             'Monitor for aphids', 'Medium', 'Available',
+             None, '2025-10-05'),
+            ('knockout-roses-spring-2025', 'Knockout Roses Spring 2025', 'Needs Attention',
+             'House 1', 'Bushy', 'Slightly dry', 'Little', 'None',
+             '30 units', 'Moderate', 'Fair', 'Aphids', '',
+             'Apply aphid treatment, increase watering', 'High', 'Not yet available',
+             None, '2025-10-06')
         ]
         for project in sample_projects:
             add_project(project)
         
-        # Add sample comments
         add_comment('hydrangea-little-lime-2025', 'Sarah M.', 'Plants looking great! Color is coming in nicely.')
         add_comment('hydrangea-little-lime-2025', 'Mike T.', 'Adjusted watering schedule. Monitoring closely.')
         add_comment('knockout-roses-spring-2025', 'Mike T.', 'Spotted some aphids on lower leaves. Planning treatment for tomorrow.')
 
-# Main Streamlit App
-def main():
-    st.set_page_config(page_title="Nursery Project Manager", page_icon="🌱", layout="wide")
-    
-    # Initialize database
-    init_database()
-    seed_sample_data()
-    
-    # Header
+# Home page with project cards
+def show_home_page():
     st.title("🌱 Nursery Project Manager")
     st.markdown("Track and manage plant projects")
+    st.markdown("---")
     
-    # Sidebar - Project Selection
-    st.sidebar.header("Projects")
+    # Add New Project Button
+    if st.button("➕ Create New Project", use_container_width=True):
+        st.session_state.show_new_project_form = True
+    
+    # Show new project form if flag is set
+    if st.session_state.get('show_new_project_form', False):
+        with st.expander("📝 New Project Form", expanded=True):
+            new_project_name = st.text_input("Project Name", key="new_proj_name")
+            new_project_id = st.text_input("Project ID (lowercase, no spaces)", key="new_proj_id", 
+                                          help="Example: roses-2025 or hydrangea-batch-3")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Create Project", use_container_width=True):
+                    if new_project_name and new_project_id:
+                        existing = get_project_by_id(new_project_id)
+                        if existing:
+                            st.error("Project ID already exists! Choose a different ID.")
+                        else:
+                            new_project_data = (
+                                new_project_id,
+                                new_project_name,
+                                'Healthy',
+                                'TBD', 'TBD', 'TBD', 'None', 'None',
+                                'TBD', 'TBD', 'TBD', '', '',
+                                'Initial planting and monitoring',
+                                'Medium',
+                                'Not yet available',
+                                None,
+                                datetime.now().strftime('%Y-%m-%d')
+                            )
+                            add_project(new_project_data)
+                            st.success(f"Project '{new_project_name}' created!")
+                            st.session_state.show_new_project_form = False
+                            st.rerun()
+                    else:
+                        st.warning("Please fill in both Project Name and Project ID")
+            
+            with col2:
+                if st.button("Cancel", use_container_width=True):
+                    st.session_state.show_new_project_form = False
+                    st.rerun()
+    
+    st.markdown("---")
+    st.subheader("📋 All Projects")
+    
+    # Display projects as cards
     projects = get_all_projects()
     
     if len(projects) == 0:
-        st.warning("No projects found. Create your first project!")
+        st.info("No projects found. Create your first project!")
         return
     
-    # Create project selection dropdown
-    project_names = {p[0]: p[1] for p in projects}
-    selected_project_id = st.sidebar.selectbox(
-        "Select Project",
-        options=list(project_names.keys()),
-        format_func=lambda x: project_names[x]
-    )
+    # Create 3 columns for cards
+    cols = st.columns(3)
     
-    # Get selected project
-    project = get_project_by_id(selected_project_id)
+    for idx, project in enumerate(projects):
+        proj_id = project[0]
+        name = project[1]
+        status = project[2]
+        last_updated = project[-1]
+        
+        with cols[idx % 3]:
+            # Card styling
+            status_emoji = "🟢" if status == "Healthy" else "🟡" if status == "Needs Attention" else "🔴"
+            
+            card_html = f"""
+            <div style="background-color: #54592C; padding: 20px; border-radius: 10px; margin-bottom: 20px; min-height: 200px;">
+                <h3 style="color: white; margin-top: 0;">{name}</h3>
+                <p style="color: #E8E8E8; font-size: 1.1em; margin: 10px 0;">
+                    {status_emoji} <strong>{status}</strong>
+                </p>
+                <p style="color: #C8C8C8; font-size: 0.9em; margin-top: 20px;">
+                    Last updated: {last_updated}
+                </p>
+            </div>
+            """
+            st.markdown(card_html, unsafe_allow_html=True)
+            
+            if st.button("View Project", key=f"view_{proj_id}", use_container_width=True):
+                st.session_state.current_project = proj_id
+                st.rerun()
+
+# Project detail page
+def show_project_page(project_id):
+    # Back button
+    if st.button("← Back to All Projects"):
+        st.session_state.current_project = None
+        st.rerun()
+    
+    # Get project
+    project = get_project_by_id(project_id)
     if not project:
         st.error("Project not found")
         return
     
     # Unpack project data
-    (proj_id, name, overall_status, overall_health, root_growth, pest_presence,
-     disease_presence, water_level, soil_quality, greenhouse_location,
-     next_steps, retail_availability, last_updated) = project
+    (proj_id, name, overall_status, house, plant_shape, water_status, 
+     pest_presence, disease_presence, quantity, root_structure, nutrient_status,
+     pest_type, disease_type, action_required, priority, retail_ready,
+     header_image_id, last_updated) = project
     
-    # Display project info in sidebar
-    st.sidebar.markdown("---")
-    st.sidebar.markdown(f"**Status:** {overall_status}")
-    st.sidebar.markdown(f"**Last Updated:** {last_updated}")
+    # Header image section
+    if header_image_id:
+        try:
+            header_url = get_photo_url_from_drive(header_image_id)
+            st.image(header_url, use_container_width=True)
+        except:
+            st.info("Header image not available")
     
-    # Add New Project Button
-    if st.sidebar.button("➕ Create New Project"):
-        st.session_state.show_new_project_form = True
+    # Upload header image option
+    with st.expander("📸 Upload/Change Header Image"):
+        header_file = st.file_uploader("Choose header image", type=['jpg', 'jpeg', 'png'], key="header_upload")
+        if st.button("Set as Header Image"):
+            if header_file:
+                file_bytes = header_file.read()
+                filename = f"{proj_id}_header_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{header_file.name}"
+                google_drive_id = upload_photo_to_drive(file_bytes, filename, header_file.type)
+                
+                if google_drive_id:
+                    # Delete old header image if exists
+                    if header_image_id:
+                        delete_photo_from_drive(header_image_id)
+                    
+                    update_project_header_image(proj_id, google_drive_id)
+                    st.success("Header image updated!")
+                    st.rerun()
     
-    # Show new project form if flag is set
-    if st.session_state.get('show_new_project_form', False):
-        with st.sidebar.expander("📝 New Project Form", expanded=True):
-            new_project_name = st.text_input("Project Name", key="new_proj_name")
-            new_project_id = st.text_input("Project ID (lowercase, no spaces)", key="new_proj_id", 
-                                          help="Example: roses-2025 or hydrangea-batch-3")
-            
-            if st.button("Create Project"):
-                if new_project_name and new_project_id:
-                    # Check if project ID already exists
-                    existing = get_project_by_id(new_project_id)
-                    if existing:
-                        st.error("Project ID already exists! Choose a different ID.")
-                    else:
-                        # Create new project with default values
-                        new_project_data = (
-                            new_project_id,
-                            new_project_name,
-                            'Healthy',  # default status
-                            100,  # default health
-                            'Not yet assessed',
-                            'None detected',
-                            'None detected',
-                            'Adequate',
-                            'Good',
-                            'TBD',  # greenhouse location
-                            'Initial planting and monitoring',
-                            'Not yet available',
-                            datetime.now().strftime('%Y-%m-%d')
-                        )
-                        add_project(new_project_data)
-                        st.success(f"Project '{new_project_name}' created!")
-                        st.session_state.show_new_project_form = False
-                        st.rerun()
-                else:
-                    st.warning("Please fill in both Project Name and Project ID")
-            
-            if st.button("Cancel"):
-                st.session_state.show_new_project_form = False
-                st.rerun()
+    st.markdown("---")
     
-    # Main content area
+    # Project title and status
     col1, col2 = st.columns([3, 1])
     
     with col1:
@@ -369,15 +431,19 @@ def main():
             # Save changes
             status_data = (
                 st.session_state.overall_status,
-                st.session_state.overall_health,
-                st.session_state.root_growth,
+                st.session_state.house,
+                st.session_state.plant_shape,
+                st.session_state.water_status,
                 st.session_state.pest_presence,
                 st.session_state.disease_presence,
-                st.session_state.water_level,
-                st.session_state.soil_quality,
-                st.session_state.greenhouse_location,
-                st.session_state.next_steps,
-                st.session_state.retail_availability,
+                st.session_state.quantity,
+                st.session_state.root_structure,
+                st.session_state.nutrient_status,
+                st.session_state.pest_type,
+                st.session_state.disease_type,
+                st.session_state.action_required,
+                st.session_state.priority,
+                st.session_state.retail_ready,
                 datetime.now().strftime('%Y-%m-%d')
             )
             update_project_status(proj_id, status_data)
@@ -388,40 +454,65 @@ def main():
             st.session_state.edit_mode = True
             st.rerun()
     
-    # Health bar
-    st.markdown(f"**Overall Health: {overall_health}%**")
-    st.progress(overall_health / 100)
-    
-    # Status fields
+    # Main status fields in two columns
     col1, col2 = st.columns(2)
     
     with col1:
         if st.session_state.edit_mode:
-            st.session_state.overall_status = st.selectbox("Overall Status", 
-                ["Healthy", "Needs Attention", "Critical"], 
-                index=["Healthy", "Needs Attention", "Critical"].index(overall_status) if overall_status in ["Healthy", "Needs Attention", "Critical"] else 0)
-            st.session_state.overall_health = st.slider("Overall Health %", 0, 100, overall_health)
-            st.session_state.root_growth = st.text_input("Root Growth", root_growth)
-            st.session_state.pest_presence = st.text_input("Pest Presence", pest_presence)
-            st.session_state.disease_presence = st.text_input("Disease Presence", disease_presence)
+            st.session_state.house = st.text_input("House:", house)
+            st.session_state.plant_shape = st.text_input("Plant Shape:", plant_shape)
+            st.session_state.water_status = st.text_input("Water Status:", water_status)
+            st.session_state.pest_presence = st.selectbox("Pest Presence:", 
+                ["None", "Little", "Moderate", "High"], 
+                index=["None", "Little", "Moderate", "High"].index(pest_presence) if pest_presence in ["None", "Little", "Moderate", "High"] else 0)
+            st.session_state.disease_presence = st.selectbox("Disease Presence:", 
+                ["None", "Little", "Moderate", "High"], 
+                index=["None", "Little", "Moderate", "High"].index(disease_presence) if disease_presence in ["None", "Little", "Moderate", "High"] else 0)
         else:
-            st.markdown(f"**Root Growth:** {root_growth}")
+            st.markdown(f"**House:** {house}")
+            st.markdown(f"**Plant Shape:** {plant_shape}")
+            st.markdown(f"**Water Status:** {water_status}")
             st.markdown(f"**Pest Presence:** {pest_presence}")
             st.markdown(f"**Disease Presence:** {disease_presence}")
     
     with col2:
         if st.session_state.edit_mode:
-            st.session_state.water_level = st.text_input("Water Level", water_level)
-            st.session_state.soil_quality = st.text_input("Soil Quality", soil_quality)
-            st.session_state.greenhouse_location = st.text_input("Greenhouse Location", greenhouse_location)
-            st.session_state.next_steps = st.text_area("Next Steps", next_steps)
-            st.session_state.retail_availability = st.text_input("Retail Availability", retail_availability)
+            st.session_state.quantity = st.text_input("Quantity:", quantity)
+            st.session_state.root_structure = st.text_input("Root Structure:", root_structure)
+            st.session_state.nutrient_status = st.text_input("Nutrient Status:", nutrient_status)
+            st.session_state.pest_type = st.text_input("Pest Type:", pest_type)
+            st.session_state.disease_type = st.text_input("Disease Type:", disease_type)
         else:
-            st.markdown(f"**Water Level:** {water_level}")
-            st.markdown(f"**Soil Quality:** {soil_quality}")
-            st.markdown(f"**Greenhouse Location:** {greenhouse_location}")
-            st.markdown(f"**Next Steps:** {next_steps}")
-            st.markdown(f"**Retail Availability:** {retail_availability}")
+            st.markdown(f"**Quantity:** {quantity}")
+            st.markdown(f"**Root Structure:** {root_structure}")
+            st.markdown(f"**Nutrient Status:** {nutrient_status}")
+            st.markdown(f"**Pest Type:** {pest_type}")
+            st.markdown(f"**Disease Type:** {disease_type}")
+    
+    # Divider
+    st.markdown("<hr style='margin: 30px 0;'>", unsafe_allow_html=True)
+    
+    # Centered fields
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.session_state.edit_mode:
+            st.session_state.overall_status = st.selectbox("Overall Status:", 
+                ["Healthy", "Needs Attention", "Critical"], 
+                index=["Healthy", "Needs Attention", "Critical"].index(overall_status) if overall_status in ["Healthy", "Needs Attention", "Critical"] else 0)
+            st.session_state.action_required = st.text_area("Action Required:", action_required)
+            st.session_state.priority = st.selectbox("Priority:", 
+                ["Low", "Medium", "High", "Urgent"],
+                index=["Low", "Medium", "High", "Urgent"].index(priority) if priority in ["Low", "Medium", "High", "Urgent"] else 1)
+            st.session_state.retail_ready = st.text_input("Retail Ready:", retail_ready)
+        else:
+            st.markdown(f"### Overall Status")
+            st.markdown(f"{overall_status}")
+            st.markdown(f"### Action Required")
+            st.markdown(f"{action_required}")
+            st.markdown(f"### Priority")
+            st.markdown(f"{priority}")
+            st.markdown(f"### Retail Ready")
+            st.markdown(f"{retail_ready}")
     
     st.markdown("---")
     
@@ -436,15 +527,11 @@ def main():
         
         if st.button("Upload Photo"):
             if uploaded_file and user_name:
-                # Read file bytes
                 file_bytes = uploaded_file.read()
-                
-                # Upload to Google Drive
                 filename = f"{proj_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uploaded_file.name}"
                 google_drive_id = upload_photo_to_drive(file_bytes, filename, uploaded_file.type)
                 
                 if google_drive_id:
-                    # Save to database
                     add_photo(proj_id, google_drive_id, photo_caption or "No caption", user_name)
                     st.success("Photo uploaded successfully!")
                     st.rerun()
@@ -461,22 +548,21 @@ def main():
             photo_id, project_id, google_drive_id, caption, user, date = photo
             with cols[idx % 3]:
                 try:
-                    # Try multiple URL formats for better compatibility
                     photo_url = get_photo_url_from_drive(google_drive_id)
-                    
-                    # Debug info - remove after testing
-                    with st.expander("🔍 Debug Info"):
-                        st.write(f"File ID: {google_drive_id}")
-                        st.write(f"URL: {photo_url}")
-                        direct_link = f"https://drive.google.com/file/d/{google_drive_id}/view"
-                        st.markdown(f"[Open in Drive]({direct_link})")
-                    
                     st.image(photo_url, use_container_width=True)
                     st.caption(f"**{caption}**")
                     st.caption(f"*{user} • {date}*")
+                    
+                    # Delete button
+                    if st.button("🗑️ Delete", key=f"delete_{photo_id}"):
+                        if delete_photo_from_drive(google_drive_id):
+                            delete_photo(photo_id)
+                            st.success("Photo deleted!")
+                            st.rerun()
+                        else:
+                            st.error("Failed to delete photo")
                 except Exception as e:
-                    st.error(f"Error loading photo: {str(e)}")
-                    # Provide fallback link
+                    st.error(f"Error loading photo")
                     direct_link = f"https://drive.google.com/file/d/{google_drive_id}/view"
                     st.markdown(f"[View Photo in Google Drive]({direct_link})")
                     st.caption(f"**{caption}**")
@@ -502,19 +588,37 @@ def main():
             else:
                 st.warning("Please provide your name and comment text")
     
-    # Display comments
+    # Display comments with green background
     comments = get_project_comments(proj_id)
     if comments:
         for comment in comments:
             comment_id, project_id, user, text, date = comment
             st.markdown(f"""
-            <div style="border-left: 4px solid #4CAF50; padding: 10px; margin: 10px 0; background-color: #f5f5f5; border-radius: 5px;">
-                <strong>{user}</strong> <span style="color: #666; font-size: 0.9em;">• {date}</span><br>
-                {text}
+            <div style="border-left: 4px solid #3d4221; padding: 15px; margin: 10px 0; background-color: #54592C; border-radius: 5px;">
+                <strong style="color: white;">{user}</strong> <span style="color: #D8D8D8; font-size: 0.9em;">• {date}</span><br>
+                <p style="color: #F0F0F0; margin-top: 8px;">{text}</p>
             </div>
             """, unsafe_allow_html=True)
     else:
         st.info("No comments yet. Start the conversation!")
+
+# Main Streamlit App
+def main():
+    st.set_page_config(page_title="Nursery Project Manager", page_icon="🌱", layout="wide")
+    
+    # Initialize database
+    init_database()
+    seed_sample_data()
+    
+    # Initialize session state for current project
+    if 'current_project' not in st.session_state:
+        st.session_state.current_project = None
+    
+    # Show appropriate page
+    if st.session_state.current_project:
+        show_project_page(st.session_state.current_project)
+    else:
+        show_home_page()
 
 if __name__ == "__main__":
     main()
