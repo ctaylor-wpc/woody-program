@@ -67,6 +67,7 @@ def init_database():
                       action_required TEXT,
                       priority TEXT,
                       retail_ready TEXT,
+                      retail_timeline TEXT,
                       header_image_id TEXT,
                       last_updated TEXT)''')
     
@@ -120,6 +121,7 @@ def migrate_database(conn, c):
                       action_required TEXT,
                       priority TEXT,
                       retail_ready TEXT,
+                      retail_timeline TEXT,
                       header_image_id TEXT,
                       last_updated TEXT)''')
         
@@ -146,11 +148,12 @@ def migrate_database(conn, c):
                 old_proj[10] if len(old_proj) > 10 else 'TBD',  # action_required (from next_steps)
                 'Medium',  # priority (default)
                 old_proj[11] if len(old_proj) > 11 else 'Not yet available',  # retail_ready
+                'TBD',  # retail_timeline
                 None,  # header_image_id
                 old_proj[12] if len(old_proj) > 12 else datetime.now().strftime('%Y-%m-%d')  # last_updated
             )
             
-            c.execute('''INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            c.execute('''INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                       new_proj)
         
         # Drop old table
@@ -248,7 +251,7 @@ def add_project(project_data):
     """Add new project to database"""
     conn = sqlite3.connect('nursery.db')
     c = conn.cursor()
-    c.execute('''INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+    c.execute('''INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
               project_data)
     conn.commit()
     conn.close()
@@ -272,6 +275,7 @@ def update_project_status(project_id, status_data):
                  action_required = ?,
                  priority = ?,
                  retail_ready = ?,
+                 retail_timeline = ?,
                  last_updated = ?
                  WHERE id = ?''',
               (*status_data, project_id))
@@ -340,12 +344,12 @@ def seed_sample_data():
             ('hydrangea-little-lime-2025', 'Hydrangea Little Lime 2025', 'Healthy',
              'House 3', 'Rounded', 'Adequate', 'None', 'None',
              '45 units', 'Excellent', 'Good', '', '',
-             'Monitor for aphids', 'Medium', 'Available',
+             'Monitor for aphids', 'Medium', 'Available', 'Ready now',
              None, '2025-10-05'),
             ('knockout-roses-spring-2025', 'Knockout Roses Spring 2025', 'Needs Attention',
              'House 1', 'Bushy', 'Slightly dry', 'Little', 'None',
              '30 units', 'Moderate', 'Fair', 'Aphids', '',
-             'Apply aphid treatment, increase watering', 'High', 'Not yet available',
+             'Apply aphid treatment, increase watering', 'High', 'Not yet available', '2-3 weeks',
              None, '2025-10-06')
         ]
         for project in sample_projects:
@@ -358,6 +362,7 @@ def seed_sample_data():
 # Home page with project cards
 def show_home_page():
     st.title("🌱 Nursery Project Manager")
+    st.markdown("Track and manage plant projects")
     st.markdown("---")
     
     # Add New Project Button
@@ -388,6 +393,7 @@ def show_home_page():
                                 'Initial planting and monitoring',
                                 'Medium',
                                 'Not yet available',
+                                'TBD',
                                 None,
                                 datetime.now().strftime('%Y-%m-%d')
                             )
@@ -460,7 +466,7 @@ def show_project_page(project_id):
     (proj_id, name, overall_status, house, plant_shape, water_status, 
      pest_presence, disease_presence, quantity, root_structure, nutrient_status,
      pest_type, disease_type, action_required, priority, retail_ready,
-     header_image_id, last_updated) = project
+     retail_timeline, header_image_id, last_updated) = project
     
     # Header image section
     if header_image_id:
@@ -528,6 +534,7 @@ def show_project_page(project_id):
                 st.session_state.action_required,
                 st.session_state.priority,
                 st.session_state.retail_ready,
+                st.session_state.retail_timeline,
                 datetime.now().strftime('%Y-%m-%d')
             )
             update_project_status(proj_id, status_data)
@@ -538,10 +545,11 @@ def show_project_page(project_id):
             st.session_state.edit_mode = True
             st.rerun()
     
-    # Main status fields in two columns
-    col1, col2 = st.columns(2)
+    # Three column layout
+    col1, col2, col3 = st.columns(3)
     
     with col1:
+        st.markdown("### Left Column")
         if st.session_state.edit_mode:
             st.session_state.house = st.text_input("House:", house)
             st.session_state.plant_shape = st.text_input("Plant Shape:", plant_shape)
@@ -560,6 +568,7 @@ def show_project_page(project_id):
             st.markdown(f"**Disease Presence:** {disease_presence}")
     
     with col2:
+        st.markdown("### Center Column")
         if st.session_state.edit_mode:
             st.session_state.quantity = st.text_input("Quantity:", quantity)
             st.session_state.root_structure = st.text_input("Root Structure:", root_structure)
@@ -573,30 +582,24 @@ def show_project_page(project_id):
             st.markdown(f"**Pest Type:** {pest_type}")
             st.markdown(f"**Disease Type:** {disease_type}")
     
-    # Divider
-    st.markdown("<hr style='margin: 30px 0;'>", unsafe_allow_html=True)
-    
-    # Centered fields
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
+    with col3:
+        st.markdown("### Right Column")
         if st.session_state.edit_mode:
             st.session_state.overall_status = st.selectbox("Overall Status:", 
                 ["Healthy", "Needs Attention", "Critical"], 
                 index=["Healthy", "Needs Attention", "Critical"].index(overall_status) if overall_status in ["Healthy", "Needs Attention", "Critical"] else 0)
-            st.session_state.action_required = st.text_area("Action Required:", action_required)
+            st.session_state.action_required = st.text_area("Action Required:", action_required, height=100)
             st.session_state.priority = st.selectbox("Priority:", 
                 ["Low", "Medium", "High", "Urgent"],
                 index=["Low", "Medium", "High", "Urgent"].index(priority) if priority in ["Low", "Medium", "High", "Urgent"] else 1)
             st.session_state.retail_ready = st.text_input("Retail Ready:", retail_ready)
+            st.session_state.retail_timeline = st.text_input("Retail Timeline:", retail_timeline)
         else:
-            st.markdown(f"### Overall Status")
-            st.markdown(f"{overall_status}")
-            st.markdown(f"### Action Required")
-            st.markdown(f"{action_required}")
-            st.markdown(f"### Priority")
-            st.markdown(f"{priority}")
-            st.markdown(f"### Retail Ready")
-            st.markdown(f"{retail_ready}")
+            st.markdown(f"**Overall Status:** {overall_status}")
+            st.markdown(f"**Action Required:** {action_required}")
+            st.markdown(f"**Priority:** {priority}")
+            st.markdown(f"**Retail Ready:** {retail_ready}")
+            st.markdown(f"**Retail Timeline:** {retail_timeline}")
     
     st.markdown("---")
     
