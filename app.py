@@ -36,26 +36,39 @@ def init_database():
     conn = sqlite3.connect('nursery.db')
     c = conn.cursor()
     
-    # Projects table - updated with new fields
-    c.execute('''CREATE TABLE IF NOT EXISTS projects
-                 (id TEXT PRIMARY KEY,
-                  name TEXT NOT NULL,
-                  overall_status TEXT,
-                  house TEXT,
-                  plant_shape TEXT,
-                  water_status TEXT,
-                  pest_presence TEXT,
-                  disease_presence TEXT,
-                  quantity TEXT,
-                  root_structure TEXT,
-                  nutrient_status TEXT,
-                  pest_type TEXT,
-                  disease_type TEXT,
-                  action_required TEXT,
-                  priority TEXT,
-                  retail_ready TEXT,
-                  header_image_id TEXT,
-                  last_updated TEXT)''')
+    # Check if we need to migrate the old schema
+    c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='projects'")
+    table_exists = c.fetchone()
+    
+    if table_exists:
+        # Check current schema
+        c.execute("PRAGMA table_info(projects)")
+        columns = [col[1] for col in c.fetchall()]
+        
+        # If old schema detected, migrate
+        if 'house' not in columns:
+            migrate_database(conn, c)
+    else:
+        # Create new table with updated schema
+        c.execute('''CREATE TABLE IF NOT EXISTS projects
+                     (id TEXT PRIMARY KEY,
+                      name TEXT NOT NULL,
+                      overall_status TEXT,
+                      house TEXT,
+                      plant_shape TEXT,
+                      water_status TEXT,
+                      pest_presence TEXT,
+                      disease_presence TEXT,
+                      quantity TEXT,
+                      root_structure TEXT,
+                      nutrient_status TEXT,
+                      pest_type TEXT,
+                      disease_type TEXT,
+                      action_required TEXT,
+                      priority TEXT,
+                      retail_ready TEXT,
+                      header_image_id TEXT,
+                      last_updated TEXT)''')
     
     # Photos table
     c.execute('''CREATE TABLE IF NOT EXISTS photos
@@ -78,6 +91,78 @@ def init_database():
     
     conn.commit()
     conn.close()
+
+def migrate_database(conn, c):
+    """Migrate old database schema to new schema"""
+    try:
+        # Get all existing projects
+        c.execute('SELECT * FROM projects')
+        old_projects = c.fetchall()
+        
+        # Rename old table
+        c.execute('ALTER TABLE projects RENAME TO projects_old')
+        
+        # Create new table with updated schema
+        c.execute('''CREATE TABLE projects
+                     (id TEXT PRIMARY KEY,
+                      name TEXT NOT NULL,
+                      overall_status TEXT,
+                      house TEXT,
+                      plant_shape TEXT,
+                      water_status TEXT,
+                      pest_presence TEXT,
+                      disease_presence TEXT,
+                      quantity TEXT,
+                      root_structure TEXT,
+                      nutrient_status TEXT,
+                      pest_type TEXT,
+                      disease_type TEXT,
+                      action_required TEXT,
+                      priority TEXT,
+                      retail_ready TEXT,
+                      header_image_id TEXT,
+                      last_updated TEXT)''')
+        
+        # Migrate data
+        for old_proj in old_projects:
+            # Old schema: id, name, overall_status, overall_health, root_growth, pest_presence,
+            #             disease_presence, water_level, soil_quality, greenhouse_location,
+            #             next_steps, retail_availability, last_updated
+            
+            new_proj = (
+                old_proj[0],  # id
+                old_proj[1],  # name
+                old_proj[2],  # overall_status
+                old_proj[9] if len(old_proj) > 9 else 'TBD',  # house (from greenhouse_location)
+                'TBD',  # plant_shape
+                old_proj[7] if len(old_proj) > 7 else 'TBD',  # water_status (from water_level)
+                old_proj[5] if len(old_proj) > 5 else 'None',  # pest_presence
+                old_proj[6] if len(old_proj) > 6 else 'None',  # disease_presence
+                'TBD',  # quantity
+                old_proj[4] if len(old_proj) > 4 else 'TBD',  # root_structure (from root_growth)
+                old_proj[8] if len(old_proj) > 8 else 'TBD',  # nutrient_status (from soil_quality)
+                '',  # pest_type
+                '',  # disease_type
+                old_proj[10] if len(old_proj) > 10 else 'TBD',  # action_required (from next_steps)
+                'Medium',  # priority (default)
+                old_proj[11] if len(old_proj) > 11 else 'Not yet available',  # retail_ready
+                None,  # header_image_id
+                old_proj[12] if len(old_proj) > 12 else datetime.now().strftime('%Y-%m-%d')  # last_updated
+            )
+            
+            c.execute('''INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                      new_proj)
+        
+        # Drop old table
+        c.execute('DROP TABLE projects_old')
+        conn.commit()
+        
+        print(f"Successfully migrated {len(old_projects)} projects to new schema")
+        
+    except Exception as e:
+        conn.rollback()
+        print(f"Error during migration: {str(e)}")
+        raise
 
 def get_google_drive_service():
     """Initialize and return Google Drive service"""
@@ -273,7 +358,6 @@ def seed_sample_data():
 # Home page with project cards
 def show_home_page():
     st.title("🌱 Nursery Project Manager")
-    st.markdown("Track and manage plant projects")
     st.markdown("---")
     
     # Add New Project Button
