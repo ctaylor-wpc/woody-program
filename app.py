@@ -45,8 +45,8 @@ def init_database():
         c.execute("PRAGMA table_info(projects)")
         columns = [col[1] for col in c.fetchall()]
         
-        # If old schema detected, migrate
-        if 'house' not in columns:
+        # If old schema detected (missing 'house' or 'retail_timeline'), migrate
+        if 'house' not in columns or 'retail_timeline' not in columns:
             migrate_database(conn, c)
     else:
         # Create new table with updated schema
